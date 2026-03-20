@@ -80,7 +80,38 @@ const ARMarkerLight = ({ label, value, x, y, colorClass, darkMode }) => (
 
 const LiveShoppingRoom = () => {
   const [isARActive, setIsARActive] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [isComputing, setIsComputing] = useState(false);
+  const [fitScore, setFitScore] = useState(0);
+
+  useEffect(() => {
+    if (isARActive) {
+      setIsComputing(true);
+      const timer = setTimeout(() => {
+        setIsComputing(false);
+        setFitScore(98);
+      }, 2500);
+      return () => clearTimeout(timer);
+    } else {
+      setFitScore(0);
+      setIsComputing(false);
+    }
+  }, [isARActive]);
+  const [isComputing, setIsComputing] = useState(false);
+  const [fitScore, setFitScore] = useState(0);
+
+  useEffect(() => {
+    if (isARActive) {
+      setIsComputing(true);
+      const timer = setTimeout(() => {
+        setIsComputing(false);
+        setFitScore(98);
+      }, 2500);
+      return () => clearTimeout(timer);
+    } else {
+      setFitScore(0);
+      setIsComputing(false);
+    }
+  }, [isARActive]);  const [darkMode, setDarkMode] = useState(false);
 
   // Apply dark class to body for global transitions
   useEffect(() => {
@@ -227,6 +258,49 @@ const LiveShoppingRoom = () => {
            </div>
 
            <div className="mb-10">
+              {/* Fit Match Score */}
+              <AnimatePresence>
+                {(isComputing || fitScore > 0) && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mb-8 p-5 rounded-3xl bg-white/5 border border-white/10 dark:border-white/5 overflow-hidden relative shadow-2xl backdrop-blur-xl"
+                  >
+                    {isComputing ? (
+                      <div className="flex items-center gap-4">
+                        <motion.div 
+                          animate={{ rotate: 360 }}
+                          transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                          className={cn("w-5 h-5 border-2 rounded-full", darkMode ? "border-neon-peach/20 border-t-neon-peach" : "border-accent-peach/20 border-t-accent-peach")}
+                        />
+                        <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-60 text-zinc-800 dark:text-zinc-200">Syncing Body Scan...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] uppercase tracking-[0.3em] font-bold opacity-50 mb-1 text-zinc-900 dark:text-zinc-100">Live Match Score</span>
+                          <span className={cn("text-3xl font-black leading-none", darkMode ? "text-neon-mint" : "text-accent-mint")}>{fitScore}%</span>
+                        </div>
+                        <div className={cn("px-4 py-2 rounded-full border shadow-inner", darkMode ? "bg-neon-mint/10 border-neon-mint/20" : "bg-accent-mint/10 border-accent-mint/20")}>
+                          <span className={cn("text-[10px] font-black uppercase tracking-widest", darkMode ? "text-neon-mint" : "text-accent-mint")}>Perfect Fit</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Scanning Line */}
+                    {isComputing && (
+                      <motion.div 
+                        initial={{ left: "-100%" }}
+                        animate={{ left: "100%" }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                        className={cn("absolute inset-0 w-full", darkMode ? "bg-gradient-to-r from-transparent via-neon-peach/10 to-transparent" : "bg-gradient-to-r from-transparent via-accent-peach/10 to-transparent")}
+                      />
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <span className={cn(
                   "text-[9px] font-black uppercase tracking-[0.4em] block mb-4",
                   darkMode ? "text-neon-peach" : "text-accent-peach"
