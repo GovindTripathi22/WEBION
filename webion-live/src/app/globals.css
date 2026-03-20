@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme {
+  --color-milk: #fafafa;
+  --color-obsidian: #050505;
+  --color-peach: #ffdbc5;
+  --color-mint: #d1f5e9;
+  --color-sky: #e0f2fe;
+  --color-accent-peach: #ff8b6e;
+  --color-accent-mint: #4ade80;
+  --color-neon-peach: #ffb59e;
+  --color-neon-mint: #55de9e;
+  --color-neon-sky: #7ad0ff;
+}
+
+:root {
+  --background: #fafafa;
+  --foreground: #111111;
+  --clay-bg: rgba(255, 255, 255, 0.4);
+  --clay-border: rgba(255, 255, 255, 0.6);
+  --clay-shadow-outer: rgba(0, 0, 0, 0.03);
+  --clay-shadow-inner: rgba(255, 255, 255, 0.5);
+}
+
+.dark {
+  --background: #050505;
+  --foreground: #fafafa;
+  --clay-bg: rgba(20, 20, 20, 0.6);
+  --clay-border: rgba(255, 255, 255, 0.05);
+  --clay-shadow-outer: rgba(0, 0, 0, 0.4);
+  --clay-shadow-inner: rgba(255, 255, 255, 0.02);
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@layer utilities {
+  .clay-glass {
+    background-color: var(--clay-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--clay-border);
+    box-shadow: 
+      0 10px 30px var(--clay-shadow-outer),
+      inset 0 0 20px var(--clay-shadow-inner);
+  }
+  
+  .clay-shadow {
+    box-shadow: 
+      8px 8px 16px rgba(0, 0, 0, 0.02),
+      -8px -8px 16px rgba(255, 255, 255, 0.8),
+      inset 2px 2px 5px rgba(255, 255, 255, 0.5);
+  }
+
+  .dark .clay-shadow {
+    box-shadow: 
+      12px 12px 24px rgba(0, 0, 0, 0.4),
+      -4px -4px 12px rgba(255, 255, 255, 0.02),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.05);
+  }
+
+  .text-serif-luxury {
+    font-family: var(--font-playfair), serif;
+    @apply italic tracking-tight font-medium;
+  }
+
+  .bg-gradient-peach {
+    background: linear-gradient(135deg, var(--color-peach) 0%, #fff 100%);
+  }
+
+  .dark .bg-gradient-peach {
+    background: linear-gradient(135deg, #1a100e 0%, #050505 100%);
+  }
+
+  .animate-float-slow {
+    animation: float-slow 8s ease-in-out infinite;
+  }
+
+  @keyframes float-slow {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-15px) rotate(1deg); }
+  }
+
+  .marker-glow-peach {
+    box-shadow: 0 0 15px var(--color-accent-peach);
+  }
+
+  .dark .marker-glow-peach {
+    box-shadow: 0 0 20px var(--color-neon-peach);
+  }
+}
+
+* {
+  @apply transition-all duration-500;
+}
+
+.rounded-clay {
+  @apply rounded-[3rem];
+}
+
+.rounded-pill {
+  @apply rounded-full;
+}

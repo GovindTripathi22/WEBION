@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Garbage Heatmap Tool</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Garbage Heatmap Tool</h1>
+    <div id="user-info"></div>
+  </header>
+  <main>
+    <section id="auth-section">
+      <h2>Authentication</h2>
+      <form id="sign-up-form">
+        <h3>Sign Up</h3>
+        <input type="email" id="signup-email" placeholder="Enter email" required />
+        <input type="password" id="signup-password" placeholder="Enter password" required />
+        <button type="submit">Sign Up</button>
+      </form>
+
+      <form id="login-form">
+        <h3>Login</h3>
+        <input type="email" id="login-email" placeholder="Enter email" required />
+        <input type="password" id="login-password" placeholder="Enter password" required />
+        <button type="submit">Login</button>
+      </form>
+
+      <button id="logout-button">Logout</button>
+    </section>
+
+    <section id="report-section">
+      <h2>Submit Garbage Report</h2>
+      <form id="report-form">
+        <input type="text" id="location" placeholder="Enter location (e.g., Street, City)" required />
+        <input type="file" id="image" accept="image/*" required />
+        <textarea id="feedback" placeholder="Enter feedback (optional)"></textarea>
+        <button type="submit">Submit Report</button>
+      </form>
+    </section>
+
+    <section id="map-section">
+      <h2>Heatmap</h2>
+      <div id="map"></div>
+    </section>
+
+    <section id="complaint-status">
+      <h2>Complaint Status</h2>
+      <div id="complaint-list"></div>
+    </section>
+  </main>
+  <footer>
+    <p>© 2024 Garbage Heatmap Tool</p>
+  </footer>
+  <script src="script.js"></script>
+</body>
+</html>
