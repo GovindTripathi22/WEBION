@@ -9,11 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -74,18 +77,21 @@ fun ClayButton(
 ) {
     val isDark = isSystemInDarkTheme()
     
-    val containerColor = when {
+    val targetContainerColor = when {
         isPrimary && isDark -> NeonPeach
         isPrimary -> AccentPeach
         isDark -> Color.White.copy(alpha = 0.05f)
         else -> Color.White
     }
     
-    val contentColor = when {
+    val targetContentColor = when {
         isPrimary -> if (isDark) Obsidian else Color.White
         isDark -> NeonSky
         else -> Obsidian
     }
+
+    val containerColor by animateColorAsState(targetValue = targetContainerColor, animationSpec = tween(500))
+    val contentColor by animateColorAsState(targetValue = targetContentColor, animationSpec = tween(500))
 
     Button(
         onClick = onClick,

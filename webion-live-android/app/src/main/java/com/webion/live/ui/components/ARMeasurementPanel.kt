@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +29,17 @@ fun ARMeasurementPanel(modifier: Modifier = Modifier) {
     val isDark = isSystemInDarkTheme()
     val bgColor = if (isDark) ClayDark else ClayWhite
     val borderColor = if (isDark) GlassBorderDark else GlassBorderLight
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val alphaAnim by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "alphaAnim"
+    )
 
     Column(
         modifier = modifier
@@ -45,7 +58,7 @@ fun ARMeasurementPanel(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-           Box(modifier = Modifier.size(6.dp).background(if (isDark) NeonPeach else AccentPeach, RoundedCornerShape(3.dp)))
+           Box(modifier = Modifier.size(6.dp).background(if (isDark) NeonPeach.copy(alpha = alphaAnim) else AccentPeach.copy(alpha = alphaAnim), RoundedCornerShape(3.dp)))
            Spacer(modifier = Modifier.width(6.dp))
            Text(
                text = "Scanning Dimensions...",
