@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven { url = uri("https://download.agora.io/maven") }
+        maven { url = uri("https://maven.agora.io") }
     }
 }
 

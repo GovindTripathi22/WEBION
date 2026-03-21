@@ -38,7 +38,7 @@ android {
         compose = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
         resources {
@@ -57,13 +57,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     
-    // Agora SDK Placeholder
-    implementation("io.agora.rtc:agora-rtc-engine:4.2.6")
-    
-    // ARCore/Sceneform Placeholders
-    implementation("com.google.ar:core:1.41.0")
-    // Note: Sceneform is often used via external libraries now as Google transitioned it
-    // implementation("com.google.ar.sceneform:core:1.17.1") 
+    // Real-Time Communication and Permissions
+    implementation("io.agora.rtc:full-sdk:4.2.6")
+    implementation("io.socket:socket.io-client:2.1.1")
+    implementation("com.google.accompanist:accompanist-permissions:0.34.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

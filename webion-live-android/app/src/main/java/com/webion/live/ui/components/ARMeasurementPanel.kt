@@ -25,7 +25,10 @@ import androidx.compose.ui.unit.sp
 import com.webion.live.ui.theme.*
 
 @Composable
-fun ARMeasurementPanel(modifier: Modifier = Modifier) {
+fun ARMeasurementPanel(
+    dimensions: String? = null,
+    modifier: Modifier = Modifier
+) {
     val isDark = isSystemInDarkTheme()
     val bgColor = if (isDark) ClayDark else ClayWhite
     val borderColor = if (isDark) GlassBorderDark else GlassBorderLight
@@ -74,12 +77,12 @@ fun ARMeasurementPanel(modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Shoulder: 42.5cm",
+            text = if (dimensions != null) "Live: $dimensions" else "Shoulder: 42.5cm",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black),
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "Length: 72.0cm",
+            text = if (dimensions != null) "Synced ✓" else "Length: 72.0cm",
             style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Black),
             color = MaterialTheme.colorScheme.onSurface
         )

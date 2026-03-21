@@ -9,13 +9,13 @@ const app = express();
 const server = http.createServer(app);
 
 // Configure CORS for Express
-app.use(cors({ origin: 'http://localhost:3000' }));
+app.use(cors());
 app.use(express.json());
 
 // Initialize Socket.io with CORS
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin: '*',
     methods: ['GET', 'POST']
   }
 });
@@ -65,12 +65,19 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('receive_ar_dimensions', data);
   });
 
+  // Listen for negotiation alerts from the web buyer
+  socket.on('negotiation_alert', (data) => {
+    console.log('Negotiation alert received:', data);
+    // Broadcast to all other clients (Android seller app)
+    socket.broadcast.emit('receive_negotiation_alert', data);
+  });
+
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
   });
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  console.log(`Webion Server is running on port ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Webion Server is running on 0.0.0.0:${PORT}`);
 });
