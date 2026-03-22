@@ -14,11 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.webion.live.ui.components.ARMeasurementPanel
 import com.webion.live.ui.components.BuyerMiniView
 import com.webion.live.ui.components.SellerCameraView
 import com.webion.live.ui.components.SellerControlBar
+import com.webion.live.ui.theme.WebionLiveTheme
 import io.agora.rtc2.ChannelMediaOptions
 import io.agora.rtc2.Constants
 import io.agora.rtc2.IRtcEngineEventHandler
@@ -60,12 +62,12 @@ fun LiveStoreScreen() {
         val opts = IO.Options.builder()
             .setTransports(arrayOf("websocket"))
             .build()
-        val mSocket = IO.socket(SERVER_URL, opts)
+        val mSocket = try { IO.socket(SERVER_URL, opts) } catch (e: Exception) { null }
 
-        mSocket.on(Socket.EVENT_CONNECT) {
+        mSocket?.on(Socket.EVENT_CONNECT) {
             Log.d(TAG, "Socket connected: ${mSocket.id()}")
         }
-        mSocket.on("receive_ar_dimensions") { args ->
+        mSocket?.on("receive_ar_dimensions") { args ->
             if (args.isNotEmpty()) {
                 val data = args[0] as? JSONObject
                 val width = data?.optDouble("mannequinWidth", 0.0) ?: 0.0
@@ -73,17 +75,17 @@ fun LiveStoreScreen() {
                 Log.d(TAG, "AR Dimensions received: $arDimensions")
             }
         }
-        mSocket.on("receive_negotiation_alert") {
+        mSocket?.on("receive_negotiation_alert") {
             scope.launch {
                 snackbarHostState.showSnackbar("🔔 Buyer wants to negotiate!")
             }
         }
-        mSocket.connect()
+        mSocket?.connect()
         socket = mSocket
 
         onDispose {
-            mSocket.disconnect()
-            mSocket.off()
+            mSocket?.disconnect()
+            mSocket?.off()
             Log.d(TAG, "Socket disconnected")
         }
     }
@@ -229,6 +231,14 @@ fun LiveStoreScreen() {
                     .padding(bottom = 32.dp, start = 16.dp, end = 16.dp)
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun LiveStoreScreenPreview() {
+    WebionLiveTheme {
+        LiveStoreScreen()
     }
 }
 

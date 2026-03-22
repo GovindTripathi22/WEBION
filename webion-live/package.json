@@ -9,12 +9,14 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "agora-rtc-sdk-ng": "^4.24.3",
     "clsx": "latest",
     "framer-motion": "latest",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "socket.io-client": "^4.8.3",
     "tailwind-merge": "latest"
   },
   "devDependencies": {

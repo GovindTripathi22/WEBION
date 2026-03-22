@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   User, 
@@ -14,10 +14,14 @@ import {
   Settings,
   Maximize,
   Sun,
-  Moon
+  Moon,
+  MessageCircle
 } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+
+// Subscriptions moved to dynamic imports inside useEffect to avoid Next.js SSR issues
+
 
 function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -63,7 +67,7 @@ const ARMarkerLight = ({ label, value, x, y, colorClass, darkMode }) => (
   <motion.div 
     initial={{ scale: 0.8, opacity: 0 }}
     animate={{ scale: 1, opacity: 1 }}
-    className="absolute flex flex-col items-center gap-3 pointer-events-none"
+    className="absolute flex flex-col items-center gap-3 pointer-events-none z-40"
     style={{ left: x, top: y }}
   >
     <div className={cn(
@@ -71,7 +75,7 @@ const ARMarkerLight = ({ label, value, x, y, colorClass, darkMode }) => (
         colorClass,
         darkMode && "border-zinc-800 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
     )} />
-    <div className="clay-glass px-4 py-2 rounded-2xl border-white/80 dark:border-white/5 font-medium">
+    <div className="clay-glass px-4 py-2 rounded-2xl border-white/80 dark:border-white/5 font-medium shadow-xl">
       <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500 block leading-none mb-1">{label}</span>
       <span className="text-xs font-black text-zinc-800 dark:text-zinc-100 leading-none">{value}</span>
     </div>
@@ -82,36 +86,134 @@ const LiveShoppingRoom = () => {
   const [isARActive, setIsARActive] = useState(false);
   const [isComputing, setIsComputing] = useState(false);
   const [fitScore, setFitScore] = useState(0);
+  const [darkMode, setDarkMode] = useState(false);
 
-  useEffect(() => {
-    if (isARActive) {
-      setIsComputing(true);
-      const timer = setTimeout(() => {
-        setIsComputing(false);
-        setFitScore(98);
-      }, 2500);
-      return () => clearTimeout(timer);
-    } else {
-      setFitScore(0);
-      setIsComputing(false);
-    }
-  }, [isARActive]);
-  const [isComputing, setIsComputing] = useState(false);
-  const [fitScore, setFitScore] = useState(0);
+  // ── WebRTC & Socket.io State ──
+  const [arWidth, setArWidth] = useState("Scan to measure");
+  const [negotiationStatus, setNegotiationStatus] = useState("Request Negotiation");
+  const socketRef = useRef(null);
+  const agoraClientRef = useRef(null);
+  const localTracksRef = useRef([]);
 
+  // Socket.io Connection (Client side only)
   useEffect(() => {
-    if (isARActive) {
-      setIsComputing(true);
-      const timer = setTimeout(() => {
-        setIsComputing(false);
-        setFitScore(98);
-      }, 2500);
-      return () => clearTimeout(timer);
-    } else {
-      setFitScore(0);
-      setIsComputing(false);
+    if (typeof window === "undefined") return;
+    
+    // Import and connect inside useEffect to avoid SSR issues
+    const initSocket = async () => {
+      const { io } = await import("socket.io-client");
+      const socket = io("http://localhost:5000", { transports: ["websocket"] });
+      socketRef.current = socket;
+
+      socket.on("connect", () => console.log("Socket connected:", socket.id));
+
+      socket.on("receive_ar_dimensions", (data) => {
+        console.log("AR Data received from Android seller:", data);
+        setIsComputing(true);
+        if (data && data.mannequinWidth) {
+          setArWidth(`${data.mannequinWidth} cm`);
+          setTimeout(() => {
+            setIsComputing(false);
+            setFitScore(98);
+          }, 1500);
+        }
+      });
+    };
+
+    initSocket();
+
+    return () => {
+      if (socketRef.current) socketRef.current.disconnect();
+    };
+  }, []);
+
+  // Negotiation Alert Function
+  const handleNegotiationRequest = () => {
+    if (socketRef.current) {
+      setNegotiationStatus("Sending...");
+      socketRef.current.emit("negotiation_alert", {
+        buyerId: "buyer-web-01",
+        timestamp: new Date().toISOString()
+      });
+      setTimeout(() => {
+        setNegotiationStatus("Sent successfully ✓");
+        setTimeout(() => setNegotiationStatus("Request Negotiation"), 3000);
+      }, 800);
     }
-  }, [isARActive]);  const [darkMode, setDarkMode] = useState(false);
+  };
+
+  // Agora RTC Setup (Client side only)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let client = null;
+
+    const initAgora = async () => {
+      try {
+        const { default: AgoraRTC } = await import("agora-rtc-sdk-ng");
+        
+        const response = await fetch("http://localhost:5000/api/agora/token?channelName=webion-live");
+        if (!response.ok) throw new Error("Failed to fetch token from localhost:5000");
+        const { token, channelName } = await response.json();
+
+        // Hardcode App ID from previous Android step
+        const APP_ID = "ef9c84c99ed2411aac7751c40a9fd720";
+        
+        client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+        agoraClientRef.current = client;
+
+        // Handle remote user (The Android Salesperson)
+        client.on("user-published", async (user, mediaType) => {
+          await client.subscribe(user, mediaType);
+          console.log("Remote user subscribed:", user.uid);
+          if (mediaType === "video") {
+            const remoteVideoTrack = user.videoTrack;
+            const sellerContainer = document.getElementById("seller-video-container");
+            if (sellerContainer) {
+              remoteVideoTrack.play(sellerContainer);
+            }
+          }
+          if (mediaType === "audio") {
+            user.audioTrack.play();
+          }
+        });
+
+        await client.join(APP_ID, channelName, token, null);
+        console.log("Joined Agora channel successfully.");
+
+        // Create and publish local tracks (Buyer webcam/mic)
+        const localTracks = await AgoraRTC.createMicrophoneAndCameraTracks();
+        localTracksRef.current = localTracks;
+        
+        await client.publish(localTracks);
+        console.log("Published local tracks!");
+
+        // Play local video in the floating buyer div
+        const buyerContainer = document.getElementById("buyer-video-container");
+        if (buyerContainer) {
+          localTracks[1].play(buyerContainer);
+        }
+
+      } catch (error) {
+        console.error("Agora Error:", error);
+      }
+    };
+
+    initAgora();
+
+    return () => {
+      // Cleanup Agora
+      if (localTracksRef.current.length > 0) {
+        localTracksRef.current.forEach(track => {
+          track.stop();
+          track.close();
+        });
+      }
+      if (agoraClientRef.current) {
+        agoraClientRef.current.leave().then(() => console.log("Left Agora channel."));
+      }
+    };
+  }, []);
 
   // Apply dark class to body for global transitions
   useEffect(() => {
@@ -153,41 +255,35 @@ const LiveShoppingRoom = () => {
             transition={{ duration: 1.5, ease: "easeOut" }}
             className="relative"
           >
-            {/* Main Product Container */}
+            {/* Main Product Container (Seller Camera Feed) */}
             <div className={cn(
                 "w-[500px] h-[700px] rounded-clay clay-shadow flex items-center justify-center border transition-all duration-1000 relative overflow-hidden group",
-                darkMode ? "bg-[#0a0a0a] border-white/5" : "bg-white border-white"
+                darkMode ? "bg-[#0a0a0a] border-white/5" : "bg-[#f5f5f5] border-white"
             )}>
                <div className={cn(
-                   "absolute inset-0 opacity-50",
+                   "absolute inset-0 opacity-50 z-10 pointer-events-none",
                    darkMode ? "bg-gradient-to-tr from-neon-peach/5 via-transparent to-neon-sky/5" : "bg-gradient-to-tr from-peach/10 via-transparent to-mint/10"
                )} />
                
-               <motion.div 
-                animate={{ y: [0, -15, 0] }}
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-                className="relative z-20"
-               >
-                 <ShoppingBag size={240} strokeWidth={0.5} className={cn(
-                     "drop-shadow-2xl transition-colors duration-1000",
-                     darkMode ? "text-zinc-800/20" : "text-zinc-100"
-                 )} />
-               </motion.div>
+               {/* ── SELLER REMOTE VIDEO FEED ── */}
+               <div id="seller-video-container" className="w-full h-full object-cover absolute inset-0 z-0">
+                 {/* Remote video injected here by Agora */}
+               </div>
                
                {/* AR Markers Layer */}
                <AnimatePresence>
                {isARActive && (
                   <>
                     <ARMarkerLight 
-                        label="Material" 
-                        value="Precision Thread" 
+                        label="Shoulder View" 
+                        value={arWidth} 
                         x="-10%" y="20%" 
                         colorClass={darkMode ? "bg-neon-peach" : "bg-accent-peach"} 
                         darkMode={darkMode}
                     />
                     <ARMarkerLight 
-                        label="Handle Drop" 
-                        value="12.5 cm" 
+                        label="Fit Estimation" 
+                        value={fitScore > 0 ? "Perfect" : "Scanning..."} 
                         x="90%" y="15%" 
                         colorClass={darkMode ? "bg-neon-sky" : "bg-sky-400"} 
                         darkMode={darkMode}
@@ -206,6 +302,32 @@ const LiveShoppingRoom = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* ── BUYER FLOATING WEBCAM (Pip) ── */}
+      <motion.div 
+        drag
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragElastic={0.1}
+        className="absolute bottom-32 right-16 z-50 cursor-grab active:cursor-grabbing"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: 1.5, duration: 0.8, type: "spring" }}
+      >
+        <div className={cn(
+          "w-[140px] h-[200px] rounded-3xl overflow-hidden shadow-2xl border-2 relative",
+          darkMode ? "border-white/10 shadow-black/50" : "border-white shadow-zinc-300"
+        )}>
+          {/* Main Local Video Inject point */}
+          <div id="buyer-video-container" className="absolute inset-0 z-0 bg-black"></div>
+          
+          {/* MediaPipe Canvas readiness */}
+          <canvas id="ar-canvas" className="absolute inset-0 z-50 pointer-events-none"></canvas>
+          
+          <div className="absolute bottom-2 left-2 px-2 py-1 rounded-full bg-black/40 backdrop-blur-md text-[8px] font-black uppercase text-white tracking-widest z-50">
+            You (Buyer)
+          </div>
+        </div>
+      </motion.div>
 
       {/* 2. PREMIUM HEADER */}
       <header className="absolute top-12 inset-x-16 flex items-center justify-between z-50 pointer-events-none">
@@ -247,12 +369,12 @@ const LiveShoppingRoom = () => {
 
       {/* 4. PRODUCT PILLAR (Serif / High Contrast) */}
       <motion.aside 
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        initial={{ x: -50, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
         transition={{ delay: 0.7 }}
         className="absolute bottom-16 left-16 z-40 w-[380px]"
       >
-        <div className="clay-glass p-12 rounded-clay relative overflow-hidden group">
+        <div className="clay-glass p-12 rounded-clay relative overflow-hidden group border border-white/20 dark:border-white/5">
            <div className="absolute top-8 right-8 text-zinc-200 dark:text-zinc-800 opacity-20 group-hover:opacity-40 transition-opacity">
               <Radio size={32} />
            </div>
@@ -274,7 +396,7 @@ const LiveShoppingRoom = () => {
                           transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
                           className={cn("w-5 h-5 border-2 rounded-full", darkMode ? "border-neon-peach/20 border-t-neon-peach" : "border-accent-peach/20 border-t-accent-peach")}
                         />
-                        <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-60 text-zinc-800 dark:text-zinc-200">Syncing Body Scan...</span>
+                        <span className="text-[10px] font-bold tracking-[0.2em] uppercase opacity-60 text-zinc-800 dark:text-zinc-200">Syncing Android Scan...</span>
                       </div>
                     ) : (
                       <div className="flex items-center justify-between">
@@ -304,37 +426,39 @@ const LiveShoppingRoom = () => {
               <span className={cn(
                   "text-[9px] font-black uppercase tracking-[0.4em] block mb-4",
                   darkMode ? "text-neon-peach" : "text-accent-peach"
-              )}>The Midnight Curator</span>
+              )}>Live Auction Setup</span>
               <h2 className="text-5xl font-medium text-serif-luxury text-zinc-900 dark:text-zinc-100 leading-[0.9] mb-4">
                 Silk Mesh <br /> Collection
               </h2>
               <p className="text-zinc-400 dark:text-zinc-500 text-xs font-medium leading-relaxed max-w-[80%]">
-                A masterpiece of sustainable architecture and high-fashion aesthetics.
+                A masterpiece of sustainable architecture and high-fashion aesthetics. Currently being modeled live by the seller.
               </p>
            </div>
 
            <div className="flex gap-4 mb-10">
               <div className="flex-1 p-5 bg-zinc-50 dark:bg-zinc-900/50 rounded-3xl border border-zinc-100 dark:border-white/5">
-                 <span className="text-[8px] font-bold text-zinc-300 dark:text-zinc-600 uppercase block mb-1">Reserve</span>
+                 <span className="text-[8px] font-bold text-zinc-300 dark:text-zinc-600 uppercase block mb-1">Current Bid</span>
                  <span className="text-xl font-black">€1,850</span>
               </div>
               <div className="flex-1 p-5 bg-zinc-50 dark:bg-zinc-900/50 rounded-3xl border border-zinc-100 dark:border-white/5">
                  <span className="text-[8px] font-bold text-zinc-300 dark:text-zinc-600 uppercase block mb-1">Status</span>
-                 <span className={cn("text-xl font-black", darkMode ? "text-neon-mint" : "text-accent-mint")}>Limited</span>
+                 <span className={cn("text-xl font-black", darkMode ? "text-neon-mint" : "text-accent-mint")}>Live</span>
               </div>
            </div>
 
-           <button className={cn(
+           <button 
+             onClick={handleNegotiationRequest}
+             className={cn(
                "w-full h-16 rounded-clay font-black uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-3 transition-all",
-               darkMode ? "bg-neon-peach text-zinc-900 shadow-xl shadow-neon-peach/10" : "bg-zinc-950 text-white hover:bg-zinc-800"
+               darkMode ? "bg-neon-sky text-zinc-900 shadow-xl shadow-neon-sky/10" : "bg-black text-white hover:bg-zinc-800 hover:shadow-2xl"
            )}>
-              Purchase Reserve
-              <ArrowRight size={14} />
+              <MessageCircle size={15} />
+              {negotiationStatus}
            </button>
         </div>
       </motion.aside>
 
-      {/* 5. FLOATING BOTTOM CONTROLS (Sync with Android) */}
+      {/* 5. FLOATING BOTTOM CONTROLS */}
       <footer className="absolute bottom-10 left-1/2 -translate-x-1/2 z-50">
          <div className="p-3 clay-glass rounded-[4rem] flex items-center gap-4 shadow-[0_30px_60px_rgba(0,0,0,0.12)] border-white/20 dark:border-white/5">
             <div className="flex items-center gap-2 p-1 bg-white/10 dark:bg-black/20 rounded-full">
@@ -350,13 +474,15 @@ const LiveShoppingRoom = () => {
             
             <div className="w-[1px] h-10 bg-zinc-200 dark:bg-white/10 mx-1" />
             
-            <button className={cn(
+            <button 
+                onClick={handleNegotiationRequest}
+                className={cn(
                 "h-14 px-12 rounded-full font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl transition-all hover:scale-105 active:scale-95",
                 darkMode 
                     ? "bg-neon-peach text-zinc-900 shadow-neon-peach/20" 
                     : "bg-zinc-900 text-white shadow-zinc-900/20"
             )}>
-                Push Product
+                Confirm Purchase
             </button>
          </div>
       </footer>
@@ -366,7 +492,7 @@ const LiveShoppingRoom = () => {
          <div className="flex items-center gap-6">
             <div className="flex flex-col items-end">
                 <span className="text-[9px] font-black text-zinc-300 dark:text-zinc-700 uppercase tracking-widest">Network</span>
-                <span className={cn("text-xs font-black", darkMode ? "text-neon-sky" : "text-zinc-900")}>SYNC • 12MS</span>
+                <span className={cn("text-xs font-black", darkMode ? "text-neon-sky" : "text-zinc-900")}>SYNC • LIVE</span>
             </div>
             <button className="w-12 h-12 rounded-full border border-zinc-100 dark:border-white/5 flex items-center justify-center text-zinc-300 dark:text-zinc-700 hover:text-zinc-900 dark:hover:text-white transition-colors">
                 <Maximize size={18} />
