@@ -3,6 +3,7 @@
 
 # Except the following folders
 !/webion/
+!/ar-tryon-model/
 !/.gitignore
 
 # Dependencies
