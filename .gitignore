@@ -2,9 +2,7 @@
 /*
 
 # Except the following folders
-!/webion-live/
-!/webion-live-android/
-!/webion-server/
+!/webion/
 !/.gitignore
 
 # Dependencies
