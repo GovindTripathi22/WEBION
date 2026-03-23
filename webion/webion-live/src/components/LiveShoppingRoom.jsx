@@ -67,17 +67,13 @@ const ARMarkerLight = ({ label, value, x, y, colorClass, darkMode }) => (
   <motion.div 
     initial={{ scale: 0.8, opacity: 0 }}
     animate={{ scale: 1, opacity: 1 }}
-    className="absolute flex flex-col items-center gap-3 pointer-events-none z-40"
+    className="absolute flex flex-col items-center gap-2 pointer-events-none z-40"
     style={{ left: x, top: y }}
   >
-    <div className={cn(
-        "w-3 h-3 rounded-full border-2 border-white shadow-xl", 
-        colorClass,
-        darkMode && "border-zinc-800 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-    )} />
-    <div className="clay-glass px-4 py-2 rounded-2xl border-white/80 dark:border-white/5 font-medium shadow-xl">
-      <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500 block leading-none mb-1">{label}</span>
-      <span className="text-xs font-black text-zinc-800 dark:text-zinc-100 leading-none">{value}</span>
+    <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_12px_rgba(202,138,4,0.8)]" />
+    <div className="liquid-glass px-4 py-2.5 rounded-2xl shadow-xl border border-yellow-600/20">
+      <span className="text-[8px] font-bold uppercase tracking-[0.25em] text-yellow-600/70 block leading-none mb-1" style={{fontFamily:"'Josefin Sans',sans-serif"}}>{label}</span>
+      <span className="text-xs font-black text-white leading-none" style={{fontFamily:"'Cinzel',serif"}}>{value}</span>
     </div>
   </motion.div>
 );
@@ -238,8 +234,8 @@ const LiveShoppingRoom = () => {
 
   return (
     <div className={cn(
-        "relative h-screen w-screen transition-colors duration-1000 overflow-hidden selection:bg-peach selection:text-zinc-900",
-        darkMode ? "bg-obsidian text-zinc-50" : "bg-milk text-zinc-950"
+        "relative h-screen w-screen transition-colors duration-1000 overflow-hidden selection:bg-yellow-600/20 selection:text-yellow-400",
+        darkMode ? "bg-stone-950 text-zinc-50" : "bg-zinc-50 text-zinc-950"
     )}>
       {/* 1. IMMERSIVE BACKGROUND (Dynamic) */}
       <div className="absolute inset-0 z-0">
@@ -386,7 +382,7 @@ const LiveShoppingRoom = () => {
         transition={{ delay: 0.7 }}
         className="absolute bottom-16 left-16 z-40 w-[380px]"
       >
-        <div className="clay-glass p-12 rounded-clay relative overflow-hidden group border border-white/20 dark:border-white/5">
+        <div className="liquid-glass p-10 rounded-clay relative overflow-hidden group border border-yellow-600/15">
            <div className="absolute top-8 right-8 text-zinc-200 dark:text-zinc-800 opacity-20 group-hover:opacity-40 transition-opacity">
               <Radio size={32} />
            </div>
@@ -435,11 +431,8 @@ const LiveShoppingRoom = () => {
                 )}
               </AnimatePresence>
 
-              <span className={cn(
-                  "text-[9px] font-black uppercase tracking-[0.4em] block mb-4",
-                  darkMode ? "text-neon-peach" : "text-accent-peach"
-              )}>Live Auction Setup</span>
-              <h2 className="text-5xl font-medium text-serif-luxury text-zinc-900 dark:text-zinc-100 leading-[0.9] mb-4">
+              <span className="text-[9px] font-black uppercase tracking-[0.4em] block mb-4 text-yellow-600/80" style={{fontFamily:"'Josefin Sans',sans-serif"}}>Live Auction Setup</span>
+              <h2 className="text-4xl font-medium text-white leading-[0.95] mb-4" style={{fontFamily:"'Cinzel',serif",letterSpacing:'0.04em'}}>
                 Silk Mesh <br /> Collection
               </h2>
               <p className="text-zinc-400 dark:text-zinc-500 text-xs font-medium leading-relaxed max-w-[80%]">
@@ -460,10 +453,8 @@ const LiveShoppingRoom = () => {
 
            <button 
              onClick={handleNegotiationRequest}
-             className={cn(
-               "w-full h-16 rounded-clay font-black uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-3 transition-all",
-               darkMode ? "bg-neon-sky text-zinc-900 shadow-xl shadow-neon-sky/10" : "bg-black text-white hover:bg-zinc-800 hover:shadow-2xl"
-           )}>
+             data-cursor-hover
+             className="w-full h-16 rounded-clay font-black uppercase tracking-[0.2em] text-[10px] flex items-center justify-center gap-3 transition-all duration-300 cursor-pointer bg-gradient-to-r from-yellow-700 via-yellow-500 to-yellow-700 text-stone-950 hover:shadow-[0_0_30px_rgba(202,138,4,0.4)] hover:scale-[1.02] active:scale-95" style={{backgroundSize:'200% auto'}}>
               <MessageCircle size={15} />
               {negotiationStatus}
            </button>
@@ -518,11 +509,12 @@ const LiveShoppingRoom = () => {
 const ControlActionLight = ({ icon, active, onClick, darkMode }) => (
   <button 
     onClick={onClick}
+    data-cursor-hover
     className={cn(
-        "w-14 h-14 rounded-full flex items-center justify-center transition-all",
+        "w-14 h-14 rounded-full flex items-center justify-center transition-all cursor-pointer duration-300",
         active 
-            ? (darkMode ? "bg-neon-peach text-zinc-900 shadow-xl shadow-neon-peach/20" : "bg-peach text-accent-peach shadow-lg") 
-            : (darkMode ? "bg-white/5 text-zinc-500 hover:text-zinc-100" : "bg-white text-zinc-300 hover:text-zinc-600 hover:shadow-md")
+            ? "bg-yellow-500 text-stone-950 shadow-xl shadow-yellow-600/30" 
+            : "bg-white/5 text-stone-400 hover:text-yellow-400 hover:bg-yellow-500/10 border border-transparent hover:border-yellow-600/20"
     )}
   >
     {icon}

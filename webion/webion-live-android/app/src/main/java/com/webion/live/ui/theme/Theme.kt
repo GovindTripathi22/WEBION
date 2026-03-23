@@ -12,35 +12,57 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+// ── Webion Luxury Dark Theme (Primary) ──
 private val DarkColorScheme = darkColorScheme(
-    primary = NeonPeach,
-    secondary = NeonSky,
+    primary = LuxuryGold,
+    primaryContainer = LuxuryGoldDark,
+    secondary = Stone400,
+    secondaryContainer = Stone800,
     tertiary = NeonMint,
-    background = Obsidian,
-    surface = Obsidian,
-    onPrimary = Obsidian,
-    onSecondary = Obsidian,
-    onTertiary = Obsidian,
-    onBackground = Milk,
-    onSurface = Milk,
+    tertiaryContainer = Stone900,
+    background = Stone950,
+    surface = Stone900,
+    surfaceVariant = Stone800,
+    outline = GlassBorderGold,
+    onPrimary = Stone950,
+    onPrimaryContainer = LuxuryGoldLight,
+    onSecondary = Stone950,
+    onSecondaryContainer = Stone200,
+    onTertiary = Stone950,
+    onBackground = Stone200,
+    onSurface = Stone200,
+    onSurfaceVariant = Stone400,
+    inverseSurface = Stone200,
+    inverseOnSurface = Stone950,
+    inversePrimary = LuxuryGold,
+    error = Color(0xFFEF4444),
+    onError = Color.White,
 )
 
+// ── Webion Light Theme ──
 private val LightColorScheme = lightColorScheme(
-    primary = AccentPeach,
-    secondary = Sky,
+    primary = LuxuryGold,
+    primaryContainer = LuxuryGoldLight,
+    secondary = Stone700,
+    secondaryContainer = Stone200,
     tertiary = AccentMint,
     background = Milk,
     surface = Milk,
+    surfaceVariant = Stone200,
+    outline = GlassBorderGold,
     onPrimary = Color.White,
-    onSecondary = Obsidian,
-    onTertiary = Obsidian,
-    onBackground = Obsidian,
-    onSurface = Obsidian,
+    onPrimaryContainer = Stone900,
+    onSecondary = Color.White,
+    onSecondaryContainer = Stone800,
+    onTertiary = Color.White,
+    onBackground = Stone950,
+    onSurface = Stone950,
+    onSurfaceVariant = Stone700,
 )
 
 @Composable
 fun WebionLiveTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Default to dark for premium feel
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
@@ -49,7 +71,11 @@ fun WebionLiveTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            window.navigationBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !darkTheme
+                isAppearanceLightNavigationBars = !darkTheme
+            }
         }
     }
 

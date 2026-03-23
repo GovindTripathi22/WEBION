@@ -1,21 +1,20 @@
-import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
-const playfair = Playfair_Display({ 
-  subsets: ["latin"],
-  variable: '--font-playfair',
-});
+import Cursor from "@/components/Cursor";
 
 export const metadata = {
-  title: "Webion Live",
-  description: "Premium Real-time Interactive Live-Shopping Platform",
+  title: "Webion Live — Luxury Interactive Shopping",
+  description: "Premium AR-powered real-time live shopping platform. Try before you buy.",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} ${playfair.variable} antialiased`}>
+    <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
+      </head>
+      <body className="antialiased ambient-bg">
+        <Cursor />
         {children}
       </body>
     </html>
