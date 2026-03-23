@@ -55,6 +55,10 @@ class IrisCalibrator:
         )
         self.landmarker = FaceLandmarker.create_from_options(options)
 
+        # Stabilization: history of the last 30 valid scale ratios
+        from collections import deque
+        self.ratio_history = deque(maxlen=30)
+
     @staticmethod
     def _dist(p1, p2):
         return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
@@ -91,6 +95,15 @@ class IrisCalibrator:
             return None
 
         cm_per_pixel = self.IRIS_DIAMETER_CM / iris_width_px
+
+        # --- Stabilization ---
+        self.ratio_history.append(cm_per_pixel)
+        
+        # Only return the average if we have enough samples for stability
+        if len(self.ratio_history) < 10:
+            return None
+            
+        avg_ratio = sum(self.ratio_history) / len(self.ratio_history)
 
         # --- Visual feedback ---
         cx     = (p_right[0] + p_left[0]) // 2
