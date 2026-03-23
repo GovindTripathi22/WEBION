@@ -2,32 +2,39 @@ import numpy as np
 from collections import deque
 
 class MeasurementSmoother:
-    def __init__(self, history_size=10):
-        # Buffers for recent measurements
-        self.shoulder_buffer = deque(maxlen=history_size)
-        self.chest_buffer = deque(maxlen=history_size)
-        self.length_buffer = deque(maxlen=history_size)
-        self.confidence_buffer = deque(maxlen=history_size)
+    """
+    Weighted moving average smoother.
+    Recent frames have higher weight so display responds faster
+    but still filters out jitter.
+    """
+    def __init__(self, history_size=20):
+        self.history_size = history_size
+        self.shoulder_buf   = deque(maxlen=history_size)
+        self.chest_buf      = deque(maxlen=history_size)
+        self.length_buf     = deque(maxlen=history_size)
+        self.hip_buf        = deque(maxlen=history_size)
+        self.confidence_buf = deque(maxlen=history_size)
+
+    def _weighted_mean(self, buf):
+        """Apply linearly increasing weights to favour recent readings."""
+        vals    = np.array(buf)
+        weights = np.arange(1, len(vals) + 1, dtype=float)
+        return float(np.average(vals, weights=weights))
 
     def update(self, measurements):
         if not measurements:
             return None
-            
-        # Add to buffers
-        self.shoulder_buffer.append(measurements["shoulderWidth"])
-        self.chest_buffer.append(measurements["chestWidth"])
-        self.length_buffer.append(measurements["garmentLength"])
-        self.confidence_buffer.append(measurements["confidence"])
 
-        # Calculate averages
-        avg_shoulder = np.mean(self.shoulder_buffer)
-        avg_chest = np.mean(self.chest_buffer)
-        avg_length = np.mean(self.length_buffer)
-        avg_confidence = np.mean(self.confidence_buffer)
+        self.shoulder_buf.append(measurements["shoulderWidth"])
+        self.chest_buf.append(measurements["chestWidth"])
+        self.length_buf.append(measurements["garmentLength"])
+        self.hip_buf.append(measurements.get("hip_width_cm", measurements["chestWidth"]))
+        self.confidence_buf.append(measurements["confidence"])
 
         return {
-            "shoulderWidth": avg_shoulder,
-            "chestWidth": avg_chest,
-            "garmentLength": avg_length,
-            "confidence": avg_confidence
+            "shoulderWidth": self._weighted_mean(self.shoulder_buf),
+            "chestWidth":    self._weighted_mean(self.chest_buf),
+            "garmentLength": self._weighted_mean(self.length_buf),
+            "hip_width_cm":  self._weighted_mean(self.hip_buf),
+            "confidence":    self._weighted_mean(self.confidence_buf),
         }
