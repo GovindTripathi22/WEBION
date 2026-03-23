@@ -8,21 +8,13 @@ from smoothing import MeasurementSmoother
 #  CAMERA CONFIGURATION
 #  DroidCam options:
 #    1. USB mode:   cv2.VideoCapture(1)  or  cv2.VideoCapture(2)
-#    2. Wi-Fi mode: cv2.VideoCapture("http://<PHONE_IP>:4747/video")
+#    2. Wi-Fi mode: cv2.VideoCapture("http://192.168.1.100:4747/video")
 #
-#  To use DroidCam over Wi-Fi, replace DROIDCAM_IP with your phone IP
-#  shown in the DroidCam app on your phone.
+#  To use DroidCam: Update CAMERA_SOURCE below with your phone IP!
 # ─────────────────────────────────────────────────────────────
-DROIDCAM_IP   = "192.168.1.100"   # <-- Change to your phone's IP
-DROIDCAM_PORT = 4747
-CAMERA_SOURCE = f"http://{DROIDCAM_IP}:{DROIDCAM_PORT}/video"
-
-# ─────────────────────────────────────────────────────────────
-# Uncomment ONE of these lines to select your camera:
-# CAMERA_SOURCE = 0                                          # built-in webcam
-# CAMERA_SOURCE = 1                                          # external/USB webcam
-# CAMERA_SOURCE = f"http://{DROIDCAM_IP}:{DROIDCAM_PORT}/video"  # DroidCam Wi-Fi
-# ─────────────────────────────────────────────────────────────
+CAMERA_SOURCE = 0                                          # Default to primary webcam
+# CAMERA_SOURCE = 1                                          # Try secondary/USB webcam
+# CAMERA_SOURCE = "http://192.168.1.100:4747/video"          # Example DroidCam IP
 
 
 def draw_hud(frame, smoothed, torso_box):
