@@ -1,9 +1,7 @@
 import math
-import mediapipe as mp
 
 class GarmentMeasurer:
     def __init__(self):
-        self.mp_pose = mp.solutions.pose
         self.standard_shoulder_cm = 44.0  # Standard mannequin shoulder width
 
     def _distance(self, p1, p2):
@@ -11,18 +9,17 @@ class GarmentMeasurer:
         return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
     def measure(self, landmarks, frame_width, frame_height):
-        if not landmarks:
+        # In modern Tasks API, landmarks is the list itself (results.pose_landmarks[0])
+        if not landmarks or len(landmarks) < 25:
             return None
             
-        lmList = landmarks.landmark
+        # Indices: 11: L_SHOULDER, 12: R_SHOULDER, 23: L_HIP, 24: R_HIP
+        l_shoulder = landmarks[11]
+        r_shoulder = landmarks[12]
+        l_hip = landmarks[23]
+        r_hip = landmarks[24]
         
-        # Get required landmarks
-        l_shoulder = lmList[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value]
-        r_shoulder = lmList[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
-        l_hip = lmList[self.mp_pose.PoseLandmark.LEFT_HIP.value]
-        r_hip = lmList[self.mp_pose.PoseLandmark.RIGHT_HIP.value]
-        
-        # Average visibility as a proxy for confidence
+        # visibility field still exists in NormalizedLandmark
         confidence = sum([l_shoulder.visibility, r_shoulder.visibility, 
                           l_hip.visibility, r_hip.visibility]) / 4.0
 

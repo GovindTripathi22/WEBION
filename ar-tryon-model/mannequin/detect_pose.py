@@ -1,46 +1,51 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import os
 
 class MannequinPoseDetector:
     def __init__(self):
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            enable_segmentation=False,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+        # Using modern Tasks API for compatibility with Python 3.12
+        BaseOptions = mp.tasks.BaseOptions
+        PoseLandmarker = mp.tasks.vision.PoseLandmarker
+        PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+        VisionRunningMode = mp.tasks.vision.RunningMode
+
+        # Ensure the model file exists
+        model_path = os.path.join(os.path.dirname(__file__), 'pose_landmarker.task')
+        
+        options = PoseLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=model_path),
+            running_mode=VisionRunningMode.IMAGE
         )
-        self.mp_drawing = mp.solutions.drawing_utils
+        self.landmarker = PoseLandmarker.create_from_options(options)
         
     def detect_pose(self, frame):
         # Convert BGR to RGB
         image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
+        # Create MediaPipe Image object
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+        
         # Process the image
-        results = self.pose.process(image_rgb)
+        results = self.landmarker.detect(mp_image)
         
         annotated_frame = frame.copy()
         torso_box = None
+        pose_landmarks = None
         
         if results.pose_landmarks:
-            # Draw landmarks
-            self.mp_drawing.draw_landmarks(
-                annotated_frame, 
-                results.pose_landmarks, 
-                self.mp_pose.POSE_CONNECTIONS
-            )
-            
-            landmarks = results.pose_landmarks.landmark
+            pose_landmarks = results.pose_landmarks[0] # Single person
             
             # Extract relevant points
             h, w, _ = frame.shape
             
-            l_shoulder = landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value]
-            r_shoulder = landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value]
-            l_hip = landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value]
-            r_hip = landmarks[self.mp_pose.PoseLandmark.RIGHT_HIP.value]
+            # MediaPipe Tasks output indices are the same as legacy
+            # 11: L_SHOULDER, 12: R_SHOULDER, 23: L_HIP, 24: R_HIP
+            l_shoulder = pose_landmarks[11]
+            r_shoulder = pose_landmarks[12]
+            l_hip = pose_landmarks[23]
+            r_hip = pose_landmarks[24]
             
             # Calculate coordinates in pixels
             points = [
@@ -49,6 +54,10 @@ class MannequinPoseDetector:
                 (int(l_hip.x * w), int(l_hip.y * h)),
                 (int(r_hip.x * w), int(r_hip.y * h))
             ]
+            
+            # Draw landmarks (simplified version since mp.solutions is missing)
+            for p in points:
+                cv2.circle(annotated_frame, p, 5, (0, 0, 255), -1)
             
             x_coords = [p[0] for p in points]
             y_coords = [p[1] for p in points]
@@ -69,7 +78,6 @@ class MannequinPoseDetector:
             
             if x_min < x_max and y_min < y_max:
                 torso_box = (x_min, y_min, x_max, y_max)
-                # Draw the torso bounding box on the original frame
                 cv2.rectangle(annotated_frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
             
-        return results.pose_landmarks, annotated_frame, torso_box
+        return pose_landmarks, annotated_frame, torso_box
