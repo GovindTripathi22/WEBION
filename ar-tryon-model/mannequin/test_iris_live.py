@@ -199,11 +199,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    cap.release()
-    cv2.destroyAllWindows()
-    print("[INFO] Application closed.")
-
-
-if __name__ == "__main__":
-    main()
