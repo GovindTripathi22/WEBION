@@ -85,31 +85,77 @@ class IrisCalibrator:
 
         W, H = frame_width, frame_height
 
-        p_right = (int(lm[self.IRIS_RIGHT_EDGE].x * W),
-                   int(lm[self.IRIS_RIGHT_EDGE].y * H))
-        p_left  = (int(lm[self.IRIS_LEFT_EDGE].x  * W),
-                   int(lm[self.IRIS_LEFT_EDGE].y  * H))
+        # --- Head Rotation / Face Symmetry Check ---
+        # 4 = Nose tip, 468 = Right iris center, 473 = Left iris center
+        p_nose = (lm[4].x * W, lm[4].y * H)
+        p_right_center = (lm[468].x * W, lm[468].y * H)
+        p_left_center = (lm[473].x * W, lm[473].y * H)
 
-        iris_width_px = self._dist(p_right, p_left)
-        if iris_width_px < 1:
+        dist_nose_right = self._dist(p_nose, p_right_center)
+        dist_nose_left  = self._dist(p_nose, p_left_center)
+
+        if dist_nose_right > 0 and dist_nose_left > 0:
+            symmetry_ratio = min(dist_nose_right, dist_nose_left) / max(dist_nose_right, dist_nose_left)
+            # If the head is rotated too much, we skip this frame to prevent perspective error
+            if symmetry_ratio < 0.90:
+                if len(self.ratio_history) >= 10:
+                    # Calculate trimmed mean/average from history
+                    vals = sorted(self.ratio_history)
+                    n = len(vals)
+                    if n >= 15:
+                        trim = int(n * 0.15)
+                        trimmed = vals[trim:n-trim]
+                        return sum(trimmed) / len(trimmed)
+                    return sum(vals) / n
+                return None
+
+        # --- Dual-Iris Width Measurement ---
+        # Right iris (subject's left eye): right edge (470), left edge (472)
+        p_right_r = (lm[470].x * W, lm[470].y * H)
+        p_right_l = (lm[472].x * W, lm[472].y * H)
+        width_right = self._dist(p_right_r, p_right_l)
+
+        # Left iris (subject's right eye): right edge (475), left edge (477)
+        p_left_r  = (lm[475].x * W, lm[475].y * H)
+        p_left_l  = (lm[477].x * W, lm[477].y * H)
+        width_left  = self._dist(p_left_r, p_left_l)
+
+        # Average the widths if both are valid to reduce noise
+        if width_right > 1 and width_left > 1:
+            iris_width_px = (width_right + width_left) / 2.0
+        elif width_right > 1:
+            iris_width_px = width_right
+        elif width_left > 1:
+            iris_width_px = width_left
+        else:
             return None
 
         cm_per_pixel = self.IRIS_DIAMETER_CM / iris_width_px
 
-        # --- Stabilization ---
+        # --- Stabilization with Outlier Filtering ---
         self.ratio_history.append(cm_per_pixel)
         
         # Only return the average if we have enough samples for stability
         if len(self.ratio_history) < 10:
             return None
             
-        avg_ratio = sum(self.ratio_history) / len(self.ratio_history)
+        # Robust trimmed average (sort and drop top/bottom 15% to eliminate tracking spikes)
+        vals = sorted(self.ratio_history)
+        n = len(vals)
+        if n >= 15:
+            trim = int(n * 0.15)
+            trimmed = vals[trim:n-trim]
+            avg_ratio = sum(trimmed) / len(trimmed)
+        else:
+            avg_ratio = sum(vals) / n
 
-        # --- Visual feedback ---
-        cx     = (p_right[0] + p_left[0]) // 2
-        cy     = (p_right[1] + p_left[1]) // 2
-        radius = max(2, int(iris_width_px / 2))
-        cv2.circle(frame, (cx, cy), radius, (0, 220, 80), 2)
-        cv2.circle(frame, (cx, cy), 2,      (0, 220, 80), -1)
+        # --- Visual feedback (draw circles on both irises) ---
+        for cx_px, cy_px, w_px in [( (p_right_r[0]+p_right_l[0])/2, (p_right_r[1]+p_right_l[1])/2, width_right ),
+                                   ( (p_left_r[0]+p_left_l[0])/2,   (p_left_r[1]+p_left_l[1])/2,   width_left )]:
+            cx, cy = int(cx_px), int(cy_px)
+            radius = max(2, int(w_px / 2))
+            cv2.circle(frame, (cx, cy), radius, (0, 220, 80), 2)
+            cv2.circle(frame, (cx, cy), 2,      (0, 220, 80), -1)
 
-        return cm_per_pixel
+        return avg_ratio
+
