@@ -105,8 +105,15 @@ class IrisCalibrator:
                     if n >= 15:
                         trim = int(n * 0.15)
                         trimmed = vals[trim:n-trim]
-                        return sum(trimmed) / len(trimmed)
-                    return sum(vals) / n
+                        avg_ratio = sum(trimmed) / len(trimmed)
+                    else:
+                        avg_ratio = sum(vals) / n
+                    focal_length_px = 1.0 * W
+                    distance_to_camera_cm = focal_length_px * avg_ratio
+                    return {
+                        "scale_ratio": avg_ratio,
+                        "distance_cm": distance_to_camera_cm
+                    }
                 return None
 
         # --- Dual-Iris Width Measurement ---
@@ -157,5 +164,11 @@ class IrisCalibrator:
             cv2.circle(frame, (cx, cy), radius, (0, 220, 80), 2)
             cv2.circle(frame, (cx, cy), 2,      (0, 220, 80), -1)
 
-        return avg_ratio
+        focal_length_px = 1.0 * W
+        distance_to_camera_cm = focal_length_px * avg_ratio
+
+        return {
+            "scale_ratio": avg_ratio,
+            "distance_cm": distance_to_camera_cm
+        }
 
