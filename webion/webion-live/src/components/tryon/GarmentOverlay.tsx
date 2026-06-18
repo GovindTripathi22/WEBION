@@ -42,6 +42,21 @@ export const GarmentOverlay = memo(function GarmentOverlay({
 
   const ALPHA = 0.75; // Smoothing factor (0.6 - 0.8)
 
+  // Real-Time Spring-Mass Physics state for lower torso (sway/elasticity)
+  const physicsRef = useRef<{
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    initialized: boolean;
+  }>({
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    initialized: false
+  });
+
   const selectedGarment = useMemo(() => garments.find((g) => g.id === selectedGarmentId), [garments, selectedGarmentId]);
 
   // Sync props to refs to avoid re-rendering the loop
@@ -155,7 +170,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
         );
         ctx.restore();
 
-        // --- DRAW LOWER SLICE ---
+        // --- DRAW LOWER SLICE (with spring-mass physics sway & elasticity) ---
         ctx.save();
         const splitOffsetY = (upperHeight - offsetY) * scaleX; 
         const splitPos = {
@@ -163,10 +178,49 @@ export const GarmentOverlay = memo(function GarmentOverlay({
             y: shoulderMid.y + Math.cos(shoulderAngle) * splitOffsetY
         };
         
-        ctx.translate(splitPos.x, splitPos.y);
+        // Physics Simulation Update
+        const phys = physicsRef.current;
+        if (!phys.initialized) {
+            phys.x = splitPos.x;
+            phys.y = splitPos.y;
+            phys.vx = 0;
+            phys.vy = 0;
+            phys.initialized = true;
+        }
+
+        // Stiffness k, drag/damping c, gravity offset
+        const k = 0.18;      // Spring coefficient (0.15 - 0.25)
+        const c = 0.60;      // Damping coefficient (0.50 - 0.70)
+        const gravity = 0.25; // Constant downward gravitational force on cloth
+        const dt = 1.0;
+
+        const ax = k * (splitPos.x - phys.x) - c * phys.vx;
+        const ay = k * (splitPos.y - phys.y) - c * phys.vy + gravity;
+
+        phys.vx += ax * dt;
+        phys.vy += ay * dt;
+        phys.x += phys.vx * dt;
+        phys.y += phys.vy * dt;
+
+        // Constraint check: limit the displacement so the garment stays on body
+        const dx = phys.x - splitPos.x;
+        const dy = phys.y - splitPos.y;
+        const offsetDist = Math.sqrt(dx * dx + dy * dy);
+        const maxDisplacement = shoulderWidth * 0.22; // max offset is 22% of shoulder width
+        if (offsetDist > maxDisplacement) {
+            const angleLimit = Math.atan2(dy, dx);
+            phys.x = splitPos.x + Math.cos(angleLimit) * maxDisplacement;
+            phys.y = splitPos.y + Math.sin(angleLimit) * maxDisplacement;
+            phys.vx *= 0.4;
+            phys.vy *= 0.4;
+        }
+
+        // Translate to the simulated physics position
+        ctx.translate(phys.x, phys.y);
         
-        const midTorsoAngle = (shoulderAngle + hipAngle) / 2;
-        ctx.rotate(midTorsoAngle);
+        // Calculate physics-driven dynamic rotation and vertical scale (stretching)
+        const physicsTorsoAngle = Math.atan2(phys.y - shoulderMid.y, phys.x - shoulderMid.x) - Math.PI / 2;
+        ctx.rotate(physicsTorsoAngle);
 
         const baseTorsoLength = shoulderWidth * 1.2; 
         const scaleY = (torsoLength / baseTorsoLength) * scaleX;
@@ -225,9 +279,13 @@ export const GarmentOverlay = memo(function GarmentOverlay({
           }
           ctx.restore();
         }
+      } else {
+        // Reset physics if pose landmarks are low visibility
+        physicsRef.current.initialized = false;
       }
     } else if (ctx) {
         ctx.clearRect(0, 0, w, h);
+        physicsRef.current.initialized = false;
     }
 
     requestRef.current = requestAnimationFrame(animate);
