@@ -38,7 +38,7 @@ import java.net.URL
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 private const val TAG = "LiveStoreScreen"
-private const val SERVER_URL = "http://172.26.2.35:5000"
+private const val SERVER_URL = "http://10.0.2.2:4000"
 private const val AGORA_APP_ID = "ef9c84c99ed2411aac7751c40a9fd720"
 private const val CHANNEL_NAME = "webion-live"
 

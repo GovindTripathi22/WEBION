@@ -161,6 +161,38 @@ app.get('/api/ar/size-match', async (req, res) => {
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
+  // --- WebRTC Signaling Logic ---
+  socket.on('join-room', (roomId) => {
+    socket.join(roomId);
+    console.log(`User ${socket.id} joined room ${roomId}`);
+    socket.to(roomId).emit('user-joined', { userId: socket.id });
+  });
+
+  socket.on('offer', (data) => {
+    // data: { target, offer }
+    socket.to(data.target).emit('offer', {
+      offer: data.offer,
+      sender: socket.id
+    });
+  });
+
+  socket.on('answer', (data) => {
+    // data: { target, answer }
+    socket.to(data.target).emit('answer', {
+      answer: data.answer,
+      sender: socket.id
+    });
+  });
+
+  socket.on('ice-candidate', (data) => {
+    // data: { target, candidate }
+    socket.to(data.target).emit('ice-candidate', {
+      candidate: data.candidate,
+      sender: socket.id
+    });
+  });
+
+  // --- Webion Dimensions Logic ---
   socket.on('send_ar_dimensions', async (data) => {
     console.log('AR dimensions received:', data);
 

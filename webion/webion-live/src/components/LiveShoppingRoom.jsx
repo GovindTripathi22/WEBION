@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { useTryonStore } from "../lib/tryon-store";
+import ARStage from "./tryon/ARStage";
 
 // Subscriptions moved to dynamic imports inside useEffect to avoid Next.js SSR issues
 
@@ -83,6 +85,9 @@ const LiveShoppingRoom = () => {
   const [isComputing, setIsComputing] = useState(false);
   const [fitScore, setFitScore] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  const [showTryOn, setShowTryOn] = useState(false);
+  
+  const { setSelectedLiveGarment, activeMode, setMode } = useTryonStore();
 
   // ── WebRTC & Socket.io State ──
   const [arWidth, setArWidth] = useState("Scan to measure");
@@ -107,18 +112,23 @@ const LiveShoppingRoom = () => {
 
       socket.on("receive_ar_dimensions", (data) => {
         console.log("AR Data received from Android seller:", data);
-        setIsComputing(true);
         if (data) {
-            setArWidth(data.shoulderWidth ? `${data.shoulderWidth} cm` : `${data.mannequinWidth} cm`);
-            setGarmentLength(data.mannequinLength ? `${data.mannequinLength} cm` : "N/A");
-            
-            // Fetch real size match from backend instead of hardcoding
-            fetch(`http://localhost:5000/api/ar/size-match?product_id=1&session_id=buyer-web-01`)
+          setIsComputing(true);
+            // Fetch real size match from backend
+            fetch(`http://localhost:4000/api/ar/size-match?product_id=${data.productId || 1}&session_id=buyer-web-01`)
               .then(r => r.json())
               .then(result => {
                 setIsComputing(false);
                 setFitScore(result.fit_score || 85);
                 setFitRecommendation(result.recommendation || "SCANNING");
+                
+                // Update AR Store with the new garment for try-on
+                setSelectedLiveGarment({
+                    id: data.productId || "1",
+                    imageUrl: data.imageUrl || "/garments/tshirt-blue.png",
+                    type: data.type || "T-Shirt",
+                    fitRecommendation: result.recommendation || "GOOD_FIT"
+                });
               })
               .catch(() => {
                 setIsComputing(false);
@@ -316,23 +326,39 @@ const LiveShoppingRoom = () => {
         drag
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         dragElastic={0.1}
-        className="absolute bottom-32 right-16 z-50 cursor-grab active:cursor-grabbing"
+        className={cn(
+            "absolute z-50 transition-all duration-500",
+            showTryOn 
+                ? "inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm" 
+                : "bottom-32 right-16 cursor-grab active:cursor-grabbing"
+        )}
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 1.5, duration: 0.8, type: "spring" }}
       >
         <div className={cn(
-          "w-[140px] h-[200px] rounded-3xl overflow-hidden shadow-2xl border-2 relative",
-          darkMode ? "border-white/10 shadow-black/50" : "border-white shadow-zinc-300"
+          "rounded-3xl overflow-hidden shadow-2xl border-2 relative transition-all duration-500",
+          showTryOn ? "w-[80%] h-[80%] border-white/20" : "w-[140px] h-[200px] border-white shadow-zinc-300",
+          darkMode && !showTryOn ? "border-white/10 shadow-black/50" : ""
         )}>
-          {/* Main Local Video Inject point */}
-          <div id="buyer-video-container" className="absolute inset-0 z-0 bg-black"></div>
+          {/* Main Local Video Inject point (Agora) - Only visible when NOT in AR mode */}
+          {!showTryOn && <div id="buyer-video-container" className="absolute inset-0 z-0 bg-black"></div>}
           
-          {/* MediaPipe Canvas readiness */}
-          <canvas id="ar-canvas" className="absolute inset-0 z-50 pointer-events-none"></canvas>
+          {/* AR Try-On Stage (MediaPipe) - Visible when showTryOn is true */}
+          {showTryOn && (
+            <div className="absolute inset-0 z-10">
+              <ARStage />
+              <button 
+                onClick={() => setShowTryOn(false)}
+                className="absolute top-6 right-6 p-3 rounded-full bg-black/50 text-white hover:bg-black/70 z-[100]"
+              >
+                <Plus className="rotate-45" size={24} />
+              </button>
+            </div>
+          )}
           
           <div className="absolute bottom-2 left-2 px-2 py-1 rounded-full bg-black/40 backdrop-blur-md text-[8px] font-black uppercase text-white tracking-widest z-50">
-            You (Buyer)
+            {showTryOn ? "AR Try-On Mode" : "You (Buyer)"}
           </div>
         </div>
       </motion.div>
@@ -469,6 +495,12 @@ const LiveShoppingRoom = () => {
                     icon={<Eye size={20} />} 
                     active={isARActive} 
                     onClick={() => setIsARActive(!isARActive)}
+                    darkMode={darkMode}
+                />
+                <ControlActionLight 
+                    icon={<ShoppingBag size={20} />} 
+                    active={showTryOn}
+                    onClick={() => setShowTryOn(!showTryOn)}
                     darkMode={darkMode}
                 />
                 <ControlActionLight icon={<Zap size={20} />} darkMode={darkMode} />
