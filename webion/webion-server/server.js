@@ -12,6 +12,34 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
+// Root landing page
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Webion API & Signaling Server</title>
+        <style>
+          body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+          .card { background: #1e293b; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; max-width: 480px; }
+          h1 { color: #38bdf8; margin-top: 0; }
+          p { color: #94a3b8; line-height: 1.6; }
+          a { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1.5rem; background: #0284c7; color: white; border-radius: 0.5rem; text-decoration: none; font-weight: 600; }
+          a:hover { background: #0369a1; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>🚀 Webion API Server Active</h1>
+          <p>WebRTC & Socket.io Signaling Server is running successfully on Port 4000.</p>
+          <p>To access the Virtual Try-On UI and Storefront, open the Next.js Frontend:</p>
+          <a href="http://localhost:3000">Open Virtual Fitting Room (Port 3000)</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
 // ─── MySQL Connection Pool ───
 const db = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
