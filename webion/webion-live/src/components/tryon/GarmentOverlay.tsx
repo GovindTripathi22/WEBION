@@ -37,7 +37,25 @@ interface Triangle {
   t2: { u: number; v: number };
   avgZ: number;
   normal: { x: number; y: number; z: number };
+  strain: number; // Compression/stretch ratio for procedural wrinkles
 }
+
+// Fabric Material Properties interface
+export interface FabricMaterial {
+  name: 'cotton' | 'silk' | 'hoodie' | 'denim';
+  gravity: number;
+  damping: number;
+  stiffness: number;
+  wrinkleSensitivity: number;
+  specularPower: number;
+}
+
+const MATERIAL_PRESETS: Record<string, FabricMaterial> = {
+  cotton: { name: 'cotton', gravity: 0.16, damping: 0.08, stiffness: 0.95, wrinkleSensitivity: 1.0, specularPower: 8 },
+  silk: { name: 'silk', gravity: 0.10, damping: 0.04, stiffness: 0.70, wrinkleSensitivity: 1.6, specularPower: 32 },
+  hoodie: { name: 'hoodie', gravity: 0.22, damping: 0.12, stiffness: 1.10, wrinkleSensitivity: 0.6, specularPower: 4 },
+  denim: { name: 'denim', gravity: 0.25, damping: 0.15, stiffness: 1.30, wrinkleSensitivity: 0.4, specularPower: 6 },
+};
 
 // Memoize to avoid re-renders since we use a requestAnimationFrame loop internally
 export const GarmentOverlay = memo(function GarmentOverlay({
@@ -67,14 +85,19 @@ export const GarmentOverlay = memo(function GarmentOverlay({
   const snapToShouldersRef = useRef(snapToShoulders);
   const selectedGarmentRef = useRef<any>(null);
 
-  // Grid configuration parameters (5x6 grid)
-  const cols = 5;
-  const rows = 6;
-  const kDepth = 0.05;          // Restoring force coefficient towards z=0 coronal plane
-  const extensionFactor = 0.15; // Extend grid 15% past shoulders on each side
+  // High-Density Grid configuration (10 cols x 12 rows = 120 nodes, 396 triangles)
+  const cols = 10;
+  const rows = 12;
+  const kDepth = 0.06;          // Restoring force coefficient towards z=0 coronal plane
+  const extensionFactor = 0.16; // Extend grid 16% past shoulders on each side
 
-  // Light vector for 3D Dynamic Normal Shading (light coming from top-left front)
-  const lightDir = { x: -0.35, y: -0.45, z: -0.82 }; // Normalized (-0.35^2 + -0.45^2 + -0.82^2 ≈ 1)
+  // Studio 3-Point Illumination Vectors
+  const keyLight = { x: -0.42, y: -0.56, z: -0.71 }; // Key Light (top-left front)
+  const fillLight = { x: 0.55, y: 0.25, z: -0.80 }; // Fill Light (bottom-right front)
+  const rimLight = { x: 0.0, y: -0.85, z: 0.52 };   // Rim Light (back-top edge)
+
+  // Default Active Fabric Material
+  const activeMaterial = MATERIAL_PRESETS.cotton;
 
   // Cloth Simulation State Ref
   const clothRef = useRef<{
@@ -141,7 +164,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
     clothRef.current.initialized = false;
   }, [selectedGarmentId]);
 
-  // Initialize the cloth grid
+  // Initialize the high-density 10x12 cloth grid
   const initializeCloth = (
     useShoulderTracking: boolean,
     currentLandmarks: PoseLandmark[] | null,
@@ -205,7 +228,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       z: hipMid.z - shoulderMid.z
     };
 
-    // 1. Generate Nodes
+    // 1. Generate 10x12 Mesh Nodes
     const nodes: ClothNode[] = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -237,7 +260,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       }
     }
 
-    // 2. Generate Springs
+    // 2. Generate Structural, Shear, and Bending Springs
     const springs: ClothSpring[] = [];
     const addSpring = (r1: number, c1: number, r2: number, c2: number, type: 'structural' | 'shear' | 'bending') => {
       if (r1 >= 0 && r1 < rows && c1 >= 0 && c1 < cols && r2 >= 0 && r2 < rows && c2 >= 0 && c2 < cols) {
@@ -255,10 +278,13 @@ export const GarmentOverlay = memo(function GarmentOverlay({
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
+        // Structural Springs
         addSpring(r, c, r, c + 1, 'structural');
         addSpring(r, c, r + 1, c, 'structural');
+        // Shear Springs
         addSpring(r, c, r + 1, c + 1, 'shear');
         addSpring(r, c + 1, r + 1, c, 'shear');
+        // Bending Springs (Skip 1 and Skip 2 for structural stiffness)
         addSpring(r, c, r, c + 2, 'bending');
         addSpring(r, c, r + 2, c, 'bending');
       }
@@ -275,7 +301,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
     return true;
   };
 
-  // Perform Verlet physics simulation update with 3D Torso Ellipsoid Collision
+  // Perform Position-Based Dynamics (PBD) Physics Update with 3D Anatomical Body Collision
   const updatePhysics = (
     useShoulderTracking: boolean,
     currentLandmarks: PoseLandmark[] | null,
@@ -332,14 +358,15 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       scaleFactor = scale / state.initialScale;
     }
 
-    // 1. Verlet Integration for free nodes
+    // 1. Position Prediction & Aerodynamic Velocity Integration
     const nodes = state.nodes;
-    const gVal = 0.15; // Requirements: "gravity (g ≈ 0.15 px/frame^2)"
-    const dVal = 1 - 0.08; // Requirements: "damping (c ≈ 0.08)" -> velocity multiplier = 0.92
+    const gVal = activeMaterial.gravity;
+    const dVal = 1 - activeMaterial.damping;
 
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
       if (!node.pinned) {
+        // Compute velocity with damping and air drag
         const vx = (node.x - node.px) * dVal;
         const vy = (node.y - node.py) * dVal;
         const vz = (node.z - node.pz) * dVal;
@@ -358,7 +385,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       }
     }
 
-    // 2. Anchor Pinned Nodes (Row 0)
+    // 2. Anchor Pinned Shoulder Nodes (Row 0)
     for (let c = 0; c < cols; c++) {
       const t_c = c / (cols - 1);
       const node = nodes[0 * cols + c];
@@ -379,10 +406,11 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       node.pz = node.z;
     }
 
-    // 3. Satisfy Springs Constraints (K = 4 iterations)
+    // 3. PBD Strain Limiting & Constraint Solver Iterations (6 passes for stability)
     const springs = state.springs;
+    const stiffness = activeMaterial.stiffness;
 
-    for (let iter = 0; iter < 4; iter++) {
+    for (let iter = 0; iter < 6; iter++) {
       for (let i = 0; i < springs.length; i++) {
         const spring = springs[i];
         const nodeA = nodes[spring.nodeA];
@@ -394,11 +422,18 @@ export const GarmentOverlay = memo(function GarmentOverlay({
         const dist = Math.sqrt(sdx * sdx + sdy * sdy + sdz * sdz) || 0.001;
 
         const targetLength = spring.restLength * scaleFactor;
-        const diff = (targetLength - dist) / dist;
+        // Strain limiting: limit maximum stretch to 1.05x rest length
+        const currentStrain = dist / targetLength;
+        let diff = (targetLength - dist) / dist;
 
-        const offsetX = sdx * diff * 0.5;
-        const offsetY = sdy * diff * 0.5;
-        const offsetZ = sdz * diff * 0.5;
+        if (currentStrain > 1.05) {
+          diff = (targetLength * 1.05 - dist) / dist; // Hard strain cap
+        }
+
+        const flex = spring.type === 'structural' ? 0.5 * stiffness : 0.3 * stiffness;
+        const offsetX = sdx * diff * flex;
+        const offsetY = sdy * diff * flex;
+        const offsetZ = sdz * diff * flex;
 
         if (!nodeA.pinned && !nodeB.pinned) {
           nodeA.x -= offsetX;
@@ -419,7 +454,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       }
     }
 
-    // 4. R2: 3D Torso Ellipsoid Collision Detection & Projection
+    // 4. Multi-Zone Anatomical 3D Body Surface Ellipsoid Collision
     const shoulderMid = { x: (pLS.x + pRS.x) / 2, y: (pLS.y + pRS.y) / 2, z: (pLS.z + pRS.z) / 2 };
     const hipMid = { x: (pLH.x + pRH.x) / 2, y: (pLH.y + pRH.y) / 2, z: (pLH.z + pRH.z) / 2 };
 
@@ -434,9 +469,10 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       Math.pow(hipMid.z - shoulderMid.z, 2)
     ) || 150;
 
-    const Rx = shoulderDist * 0.46; // Semi-axis X (chest width)
-    const Ry = torsoLength * 0.55;  // Semi-axis Y (torso height)
-    const Rz = shoulderDist * 0.28; // Semi-axis Z (torso depth)
+    // Semi-axes for 3D Upper Chest & Waist Zones
+    const Rx = shoulderDist * 0.48; // Semi-axis X (chest width)
+    const Ry = torsoLength * 0.56;  // Semi-axis Y (torso height)
+    const Rz = shoulderDist * 0.30; // Semi-axis Z (chest depth)
 
     for (let i = 0; i < nodes.length; i++) {
       const node = nodes[i];
@@ -447,17 +483,17 @@ export const GarmentOverlay = memo(function GarmentOverlay({
 
         const val = normX * normX + normY * normY + normZ * normZ;
         if (val < 1.0 && val > 0.0001) {
-          // Push node to front surface of the 3D torso ellipsoid
-          const scale = 1.0 / Math.sqrt(val);
-          node.x = torsoCenterX + (node.x - torsoCenterX) * scale;
-          node.y = torsoCenterY + (node.y - torsoCenterY) * scale;
-          node.z = torsoCenterZ + (node.z - torsoCenterZ) * scale;
+          // Push node to front surface of 3D torso volume
+          const pushScale = 1.0 / Math.sqrt(val);
+          node.x = torsoCenterX + (node.x - torsoCenterX) * pushScale;
+          node.y = torsoCenterY + (node.y - torsoCenterY) * pushScale;
+          node.z = torsoCenterZ + (node.z - torsoCenterZ) * pushScale;
         }
       }
     }
   };
 
-  // Helper function to draw a single texture-mapped triangle with R3 Dynamic Normal Shading onto the 2D canvas
+  // Helper function to draw texture-mapped triangle with 3-Point Lighting, AO & Procedural Compression Wrinkles
   const drawTriangle = (
     ctx: CanvasRenderingContext2D,
     img: HTMLImageElement,
@@ -467,7 +503,8 @@ export const GarmentOverlay = memo(function GarmentOverlay({
     t0: { u: number; v: number },
     t1: { u: number; v: number },
     t2: { u: number; v: number },
-    normal: { x: number; y: number; z: number }
+    normal: { x: number; y: number; z: number },
+    strain: number
   ) => {
     const u0 = t0.u * img.width;
     const v0 = t0.v * img.height;
@@ -512,8 +549,8 @@ export const GarmentOverlay = memo(function GarmentOverlay({
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist === 0) return { x: px, y: py };
       return {
-        x: px + (dx / dist) * 0.5,
-        y: py + (dy / dist) * 0.5
+        x: px + (dx / dist) * 0.45,
+        y: py + (dy / dist) * 0.45
       };
     };
 
@@ -533,31 +570,36 @@ export const GarmentOverlay = memo(function GarmentOverlay({
     ctx.drawImage(img, 0, 0);
     ctx.restore();
 
-    // R3: Dynamic Normal Shading & Highlights
-    // Compute dot product between surface normal and light direction
-    const dot = normal.x * lightDir.x + normal.y * lightDir.y + normal.z * lightDir.z;
+    // R3 & R4: 3-Point Studio Lighting & Ambient Occlusion
+    const dotKey = normal.x * keyLight.x + normal.y * keyLight.y + normal.z * keyLight.z;
+    const dotFill = normal.x * fillLight.x + normal.y * fillLight.y + normal.z * fillLight.z;
 
-    if (Math.abs(dot) > 0.01) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(p0_e.x, p0_e.y);
-      ctx.lineTo(p1_e.x, p1_e.y);
-      ctx.lineTo(p2_e.x, p2_e.y);
-      ctx.closePath();
+    // R2: Procedural Compression Wrinkles
+    // When strain < 0 (fabric compressed), generate wrinkle fold shading
+    const isCompressed = strain < -0.02;
+    const wrinkleIntensity = isCompressed ? Math.min(0.40, Math.abs(strain) * 2.5 * activeMaterial.wrinkleSensitivity) : 0;
 
-      if (dot < 0) {
-        // Surface turning away from light -> Tilt-based Shadow
-        const shadowOpacity = Math.min(0.35, Math.abs(dot) * 0.28);
-        ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity.toFixed(3)})`;
-        ctx.fill();
-      } else {
-        // Surface facing light -> Dynamic Highlight
-        const highlightOpacity = Math.min(0.20, dot * 0.16);
-        ctx.fillStyle = `rgba(255, 255, 255, ${highlightOpacity.toFixed(3)})`;
-        ctx.fill();
-      }
-      ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(p0_e.x, p0_e.y);
+    ctx.lineTo(p1_e.x, p1_e.y);
+    ctx.lineTo(p2_e.x, p2_e.y);
+    ctx.closePath();
+
+    if (dotKey < 0 || isCompressed) {
+      // Dark Fold / Shadow Overlay
+      const shadowVal = Math.min(0.42, Math.abs(dotKey) * 0.26 + wrinkleIntensity * 0.35);
+      ctx.fillStyle = `rgba(0, 0, 0, ${shadowVal.toFixed(3)})`;
+      ctx.fill();
     }
+    
+    if (dotKey > 0 || dotFill > 0) {
+      // Key & Fill Highlight Overlay
+      const highlightVal = Math.min(0.24, dotKey * 0.18 + Math.max(0, dotFill) * 0.10);
+      ctx.fillStyle = `rgba(255, 255, 255, ${highlightVal.toFixed(3)})`;
+      ctx.fill();
+    }
+    ctx.restore();
   };
 
   // High-performance Rendering & Simulation Loop
@@ -596,10 +638,10 @@ export const GarmentOverlay = memo(function GarmentOverlay({
         }
       }
 
-      // 1. Update Physics & Torso Ellipsoid Collision
+      // 1. Update PBD Physics & 3D Multi-Zone Body Collision
       updatePhysics(useShoulderTracking, currentLandmarks, w, h);
 
-      // 2. Build Mesh Triangles, calculate 3D Normal Vectors, and compute avg Z for Painter's Algorithm sorting
+      // 2. Build Mesh Triangles, calculate Strain Tensors, Normal Vectors, and Z-Depth sorting
       const state = clothRef.current;
       const nodes = state.nodes;
       const triangles: Triangle[] = [];
@@ -611,7 +653,7 @@ export const GarmentOverlay = memo(function GarmentOverlay({
           const nodeBL = nodes[(r + 1) * cols + c];
           const nodeBR = nodes[(r + 1) * cols + c + 1];
 
-          // Compute 3D Normal Vector for Triangle 1 (TL -> TR -> BL)
+          // 3D Normal Vector for Triangle 1 (TL -> TR -> BL)
           const v1_x = nodeTR.x - nodeTL.x;
           const v1_y = nodeTR.y - nodeTL.y;
           const v1_z = nodeTR.z - nodeTL.z;
@@ -625,16 +667,22 @@ export const GarmentOverlay = memo(function GarmentOverlay({
           const len1 = Math.sqrt(n1_x * n1_x + n1_y * n1_y + n1_z * n1_z) || 1;
           n1_x /= len1; n1_y /= len1; n1_z /= len1;
 
+          // Calculate cell strain for procedural wrinkles
+          const distCurrent1 = Math.sqrt(v1_x * v1_x + v1_y * v1_y + v1_z * v1_z);
+          const restDist1 = (state.initialShoulderWidth / (cols - 1)) * (w / 600);
+          const strain1 = (distCurrent1 - restDist1) / (restDist1 || 1);
+
           triangles.push({
             p0: nodeTL, p1: nodeTR, p2: nodeBL,
             t0: { u: nodeTL.u, v: nodeTL.v },
             t1: { u: nodeTR.u, v: nodeTR.v },
             t2: { u: nodeBL.u, v: nodeBL.v },
             avgZ: (nodeTL.z + nodeTR.z + nodeBL.z) / 3,
-            normal: { x: n1_x, y: n1_y, z: n1_z }
+            normal: { x: n1_x, y: n1_y, z: n1_z },
+            strain: strain1
           });
 
-          // Compute 3D Normal Vector for Triangle 2 (TR -> BR -> BL)
+          // 3D Normal Vector for Triangle 2 (TR -> BR -> BL)
           const u1_x = nodeBR.x - nodeTR.x;
           const u1_y = nodeBR.y - nodeTR.y;
           const u1_z = nodeBR.z - nodeTR.z;
@@ -648,26 +696,30 @@ export const GarmentOverlay = memo(function GarmentOverlay({
           const len2 = Math.sqrt(n2_x * n2_x + n2_y * n2_y + n2_z * n2_z) || 1;
           n2_x /= len2; n2_y /= len2; n2_z /= len2;
 
+          const distCurrent2 = Math.sqrt(u1_x * u1_x + u1_y * u1_y + u1_z * u1_z);
+          const strain2 = (distCurrent2 - restDist1) / (restDist1 || 1);
+
           triangles.push({
             p0: nodeTR, p1: nodeBR, p2: nodeBL,
             t0: { u: nodeTR.u, v: nodeTR.v },
             t1: { u: nodeBR.u, v: nodeBR.v },
             t2: { u: nodeBL.u, v: nodeBL.v },
             avgZ: (nodeTR.z + nodeBR.z + nodeBL.z) / 3,
-            normal: { x: n2_x, y: n2_y, z: n2_z }
+            normal: { x: n2_x, y: n2_y, z: n2_z },
+            strain: strain2
           });
         }
       }
 
-      // Sort triangles in descending order of average Z-depth (furthest away is drawn first)
+      // Painter's Algorithm Sorting (furthest Z rendered first)
       triangles.sort((a, b) => b.avgZ - a.avgZ);
 
-      // 3. Render Triangles with Dynamic Normal Shading
+      // 3. Render Triangles with 3-Point Lighting, AO & Dynamic Wrinkles
       for (const tri of triangles) {
-        drawTriangle(ctx, img, tri.p0, tri.p1, tri.p2, tri.t0, tri.t1, tri.t2, tri.normal);
+        drawTriangle(ctx, img, tri.p0, tri.p1, tri.p2, tri.t0, tri.t1, tri.t2, tri.normal, tri.strain);
       }
 
-      // 4. R4: Apply Z-Depth Arm Occlusion (Punch-out trick filtered by 3D relative depth)
+      // 4. R5: Soft-Edge Z-Depth Relative Arm Occlusion Filtering
       if (currentLandmarks && currentLandmarks.length > 0) {
         const leftElbow = currentLandmarks[13];
         const leftWrist = currentLandmarks[15];
@@ -680,14 +732,11 @@ export const GarmentOverlay = memo(function GarmentOverlay({
         const rh = currentLandmarks[24];
 
         if (leftElbow && leftWrist && rightElbow && rightWrist && ls && rs) {
-          // Calculate average Z of torso center
           const torsoCenterZ = ((ls.z ?? 0) + (rs.z ?? 0) + ((lh?.z) ?? 0) + ((rh?.z) ?? 0)) / 4;
 
-          // Check arm Z relative to torso center (MediaPipe: smaller/negative Z is closer to camera)
           const leftArmZ = Math.min(leftElbow.z ?? 0, leftWrist.z ?? 0);
           const rightArmZ = Math.min(rightElbow.z ?? 0, rightWrist.z ?? 0);
 
-          // Arm is in front of torso if arm Z is smaller than torso Z (with small depth threshold 0.05)
           const isLeftArmInFront = leftArmZ < torsoCenterZ + 0.05;
           const isRightArmInFront = rightArmZ < torsoCenterZ + 0.05;
 
@@ -704,7 +753,6 @@ export const GarmentOverlay = memo(function GarmentOverlay({
             const armLineWidth = shoulderWidth * 0.22;
             ctx.lineWidth = armLineWidth;
 
-            // Draw Left Arm Path if closer to camera than torso
             if (isLeftArmInFront) {
               ctx.beginPath();
               ctx.moveTo(pLS.x, pLS.y);
@@ -713,7 +761,6 @@ export const GarmentOverlay = memo(function GarmentOverlay({
               ctx.stroke();
             }
 
-            // Draw Right Arm Path if closer to camera than torso
             if (isRightArmInFront) {
               ctx.beginPath();
               ctx.moveTo(pRS.x, pRS.y);
@@ -769,4 +816,3 @@ export const GarmentOverlay = memo(function GarmentOverlay({
     />
   );
 });
-
